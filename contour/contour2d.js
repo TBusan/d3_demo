@@ -34,8 +34,15 @@ function createSVG() {
         .attr('height', config.height)
         .attr('class', 'contour-map');
 
-    return svg.append('g')
+    // 添加一个用于缩放的容器组
+    const g = svg.append('g')
         .attr('transform', `translate(${config.margin.left},${config.margin.top})`);
+
+    // 添加实际绘制内容的组
+    const contentG = g.append('g')
+        .attr('class', 'content');
+
+    return { svg, g, contentG };
 }
 
 // 创建颜色比例尺
@@ -55,8 +62,8 @@ function init() {
     const width = config.width - config.margin.left - config.margin.right;
     const height = config.height - config.margin.top - config.margin.bottom;
 
-    // 创建SVG容器
-    const svg = createSVG();
+    // 创建SVG和分组
+    const { svg, g, contentG } = createSVG();
 
     // 创建等值线生成器
     const thresholds = d3.range(-2, 2, 0.1);
@@ -77,12 +84,23 @@ function init() {
         .domain([0, config.gridSize])
         .range([height, 0]);
 
-    // 生成等值线路径
-    const contourPaths = contours(values);
+    // 创建缩放行为
+    const zoom = d3.zoom()
+        .scaleExtent([0.2, 20])
+        .on('zoom', (event) => {
+            contentG.attr('transform', event.transform);
+            
+            // 更新坐标轴
+            g.select('.x-axis').call(xAxis.scale(event.transform.rescaleX(xScale)));
+            g.select('.y-axis').call(yAxis.scale(event.transform.rescaleY(yScale)));
+        });
+
+    // 应用缩放行为
+    svg.call(zoom);
 
     // 绘制等值线
-    svg.selectAll('path')
-        .data(contourPaths)
+    contentG.selectAll('path')
+        .data(contours(values))
         .enter()
         .append('path')
         .attr('d', d3.geoPath(d3.geoIdentity()
@@ -97,11 +115,13 @@ function init() {
     const xAxis = d3.axisBottom(xScale);
     const yAxis = d3.axisLeft(yScale);
 
-    svg.append('g')
+    g.append('g')
+        .attr('class', 'x-axis')
         .attr('transform', `translate(0,${height})`)
         .call(xAxis);
 
-    svg.append('g')
+    g.append('g')
+        .attr('class', 'y-axis')
         .call(yAxis);
 
     // 添加图例
